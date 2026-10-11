@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lacquer Log</title>
+<style>
+  :root {
+    --bg: #f9f6f3; --card: #ffffff; --border: #e8ddd8;
+    --text: #2c2624; --muted: #9a8880; --accent: #c47880;
+    --accent-bg: #f5e8ea; --success: #5a9a5a; --success-bg: #eaf5ea; --warn: #a07030;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: system-ui,-apple-system,sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── Header ── */
+  .header { background: var(--card); border-bottom: 1px solid var(--border); padding: 0.75rem 1rem; position: sticky; top: 0; z-index: 10; }
+  .header-top { display: flex; align-items: center; gap: 8px; margin-bottom: 0.5rem; }
+  .header-top h1 { font-family: Georgia,serif; font-style: italic; font-weight: 400; font-size: 1.3rem; flex: 1; }
+  .btn-add { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 0.45rem 1rem; font-size: 0.82rem; font-weight: 500; cursor: pointer; min-height: 36px; white-space: nowrap; }
+
+  /* ⋯ menu */
+  .menu-wrap { position: relative; }
+  .btn-menu { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem 0.6rem; font-size: 1rem; cursor: pointer; color: var(--muted); min-height: 36px; line-height: 1; }
+  .menu-drop { display: none; position: absolute; top: calc(100% + 6px); right: 0; background: var(--card); border: 1px solid var(--border); border-radius: 10px; min-width: 140px; z-index: 50; overflow: hidden; }
+  .menu-drop.open { display: block; }
+  .menu-item { display: flex; align-items: center; gap: 8px; padding: 0.65rem 1rem; font-size: 0.84rem; color: var(--text); cursor: pointer; border: none; background: none; width: 100%; font-family: inherit; }
+  .menu-item:hover { background: var(--bg); }
+  .menu-item + .menu-item { border-top: 1px solid var(--border); }
+
+  /* Stats */
+  .stats { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 0.5rem; }
+  .stat-pill { background: var(--bg); border-radius: 5px; padding: 3px 8px; display: flex; align-items: baseline; gap: 3px; border: 1px solid var(--border); }
+  .stat-num { font-size: 0.9rem; font-weight: 500; }
+  .stat-label { font-size: 0.65rem; color: var(--muted); }
+  .stat-pill { cursor: pointer; font-family: inherit; color: inherit; }
+  .stat-pill.active { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+
+  /* Filters — search full width, selects scroll on one row */
+  .filter-search { display: flex; margin-bottom: 6px; }
+  .filter-search input { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem 0.75rem; font-size: 16px; /* prevents iOS zoom */ background: var(--bg); color: var(--text); outline: none; font-family: inherit; }
+  .filter-row { display: flex; gap: 5px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
+  .filter-row::-webkit-scrollbar { display: none; }
+  .filter-row select { border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.5rem; font-size: 0.78rem; background: var(--bg); color: var(--text); outline: none; font-family: inherit; flex-shrink: 0; min-height: 34px; }
+  .btn-sort-dir { border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.6rem; font-size: 1rem; background: var(--bg); color: var(--text); cursor: pointer; flex-shrink: 0; min-height: 34px; line-height: 1; }
+
+  /* Grid */
+  .grid-wrap { padding: 0.875rem 1rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 0.75rem; }
+  @media (max-width: 360px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .polish-card { background: var(--card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; cursor: pointer; transition: box-shadow 0.12s; }
+  .polish-card:active { opacity: 0.9; }
+  .swatch { height: 88px; position: relative; background-size: cover; background-position: center; }
+  .badge { position: absolute; top: 6px; right: 6px; background: rgba(255,255,255,0.92); border-radius: 8px; padding: 2px 7px; font-size: 0.6rem; font-weight: 600; color: #6a5040; letter-spacing: 0.04em; z-index: 1; }
+  .card-body { padding: 0.55rem 0.65rem 0.65rem; }
+  .card-brand { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-bottom: 1px; }
+  .card-name { font-size: 0.82rem; font-weight: 500; line-height: 1.3; margin-bottom: 5px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 2.1em; }
+  .card-date { font-size: 0.66rem; margin-bottom: 6px; }
+  /* Bigger touch target for mark used */
+  .btn-mark { width: 100%; padding: 0.42rem; border: none; border-radius: 6px; font-size: 0.72rem; font-weight: 500; cursor: pointer; min-height: 34px; }
+
+  .empty { text-align: center; padding: 4rem 1rem; }
+  .empty .emoji { font-size: 2.75rem; margin-bottom: 0.875rem; }
+  .empty p { color: var(--muted); font-size: 0.88rem; line-height: 1.7; margin-bottom: 1.25rem; }
+  .btn-add-first { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 0.7rem 1.5rem; font-size: 0.88rem; font-weight: 500; cursor: pointer; }
+  .no-results { text-align: center; color: var(--muted); padding: 2rem; font-size: 0.85rem; }
+
+  /* ── Overlay — full screen bottom sheet on mobile ── */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(44,38,36,0.45); z-index: 100; }
+  .overlay.open { display: flex; align-items: flex-end; justify-content: center; }
+  @media (min-width: 600px) {
+    .overlay.open { align-items: center; padding: 1.5rem 1rem; overflow-y: auto; }
+    .panel { border-radius: 16px !important; max-height: 90vh; }
+  }
+  .panel {
+    background: var(--card);
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-width: 480px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-height: 92vh;
+  }
+
+  /* drag handle */
+  .drag-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 10px auto 4px; flex-shrink: 0; }
+
+  /* ── Detail panel ── */
+  .detail-swatch { height: 180px; position: relative; background-size: cover; background-position: center; flex-shrink: 0; }
+  .detail-swatch-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(44,38,36,0.35) 0%, transparent 60%); }
+  .btn-close { position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.9); border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 1.1rem; color: var(--text); display: flex; align-items: center; justify-content: center; z-index: 2; }
+  .detail-body { padding: 1rem 1.25rem; overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+  .detail-brand { font-size: 0.67rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 2px; }
+  .detail-name { font-family: Georgia,serif; font-style: italic; font-weight: 400; font-size: 1.25rem; margin-bottom: 0.75rem; }
+  .type-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 0.875rem; }
+  .type-tag { background: var(--accent-bg); color: #8a4858; font-size: 0.7rem; padding: 4px 10px; border-radius: 20px; font-weight: 500; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1rem; }
+  .stat-box { background: var(--bg); border-radius: 8px; padding: 0.6rem 0.75rem; }
+  .stat-box-label { font-size: 0.63rem; color: var(--muted); margin-bottom: 2px; }
+  .stat-box-val { font-size: 0.9rem; font-weight: 500; }
+  /* Big prominent mark-used button */
+  .btn-mark-main { width: 100%; padding: 0.85rem; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-bottom: 1rem; min-height: 52px; }
+  .history-title { font-size: 0.68rem; font-weight: 500; color: #6a5054; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.5rem; }
+  .history-list { max-height: 140px; overflow-y: auto; }
+  .history-row { display: flex; align-items: center; gap: 8px; padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
+  .history-row:last-child { border-bottom: none; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .history-date { font-size: 0.82rem; }
+  .history-recent { margin-left: auto; font-size: 0.63rem; color: var(--muted); }
+  .btn-unuse { margin-left: auto; background: none; border: none; color: var(--muted); font-size: 0.85rem; cursor: pointer; padding: 2px 4px; line-height: 1; border-radius: 4px; }
+  .btn-unuse:hover { color: #b07070; }
+  .panel-footer { padding: 0.875rem 1.25rem; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; padding-bottom: max(0.875rem, env(safe-area-inset-bottom)); }
+  .btn-edit { flex: 1; padding: 0.65rem; background: var(--accent-bg); color: #8a4858; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 500; cursor: pointer; min-height: 44px; }
+  .btn-delete { padding: 0.65rem 1rem; background: none; color: #b07070; border: 1px solid #e8c8c8; border-radius: 8px; font-size: 0.85rem; cursor: pointer; min-height: 44px; }
+
+  /* ── Form panel ── */
+  .form-header { padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; flex-shrink: 0; }
+  .form-header h2 { font-family: Georgia,serif; font-style: italic; font-weight: 400; font-size: 1.15rem; flex: 1; }
+  .btn-close-x { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--muted); line-height: 1; padding: 0 4px; min-width: 32px; min-height: 32px; display: flex; align-items: center; justify-content: center; }
+  .form-body { padding: 1rem 1.25rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 0.875rem; -webkit-overflow-scrolling: touch; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-row-color { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+  label.field-label { display: block; font-size: 0.67rem; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+  /* font-size 16px prevents iOS auto-zoom on focus */
+  input.field, select.field { border: 1px solid var(--border); border-radius: 8px; padding: 0.55rem 0.75rem; font-size: 16px; background: var(--bg); color: var(--text); width: 100%; outline: none; font-family: inherit; min-height: 44px; }
+  .swatch-picker { width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--border); overflow: hidden; cursor: pointer; position: relative; }
+  .swatch-picker input[type=color] { position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px); opacity: 0; cursor: pointer; }
+  .type-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .type-btn { padding: 6px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 500; border: 1px solid; cursor: pointer; background: #faf6f4; color: #8a7a74; border-color: var(--border); font-family: inherit; min-height: 34px; }
+  .type-btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .form-footer { padding: 0.875rem 1.25rem; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; padding-bottom: max(0.875rem, env(safe-area-inset-bottom)); }
+  .btn-cancel { flex: 1; padding: 0.65rem; background: #f5ede8; color: #6a5054; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; cursor: pointer; font-weight: 500; min-height: 44px; }
+  .btn-save { flex: 2; padding: 0.65rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 500; cursor: pointer; min-height: 44px; }
+  .btn-save:disabled { opacity: 0.6; cursor: default; }
+
+  /* Photo */
+  .photo-tabs { display: flex; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .photo-tab { flex: 1; padding: 0.45rem; font-size: 0.78rem; font-weight: 500; border: none; background: var(--bg); color: var(--muted); cursor: pointer; font-family: inherit; min-height: 38px; }
+  .photo-tab.active { background: var(--card); color: var(--text); }
+  .photo-tab:first-child { border-right: 1px solid var(--border); }
+  .photo-upload-area { border: 1.5px dashed var(--border); border-radius: 10px; padding: 1.25rem 1rem; text-align: center; cursor: pointer; position: relative; }
+  .photo-upload-area input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .photo-upload-area .upload-icon { font-size: 1.6rem; margin-bottom: 0.4rem; }
+  .photo-upload-area p { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+  .photo-preview-wrap { position: relative; display: block; }
+  .photo-preview { width: 100%; max-height: 180px; object-fit: cover; border-radius: 8px; display: block; }
+  .photo-remove { position: absolute; top: 8px; right: 8px; background: rgba(44,38,36,0.7); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .photo-uploading { text-align: center; padding: 1.25rem; color: var(--muted); font-size: 0.82rem; font-style: italic; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <h1>Lacquer Log</h1>
+    <div class="menu-wrap">
+      <button class="btn-menu" onclick="toggleMenu()" id="menuBtn">⋯</button>
+      <div class="menu-drop" id="menuDrop">
+        <button class="menu-item" onclick="exportData();closeMenu()">↓ Export JSON</button>
+        <label class="menu-item" style="cursor:pointer;">↑ Import JSON<input type="file" accept=".json" onchange="importData(event);closeMenu()" style="display:none"></label>
+      </div>
+    </div>
+    <button class="btn-add" onclick="openForm(null)">+ Add</button>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="filter-search">
+    <input id="search" placeholder="Search brand or name…" oninput="render()" autocomplete="off" />
+  </div>
+  <div class="filter-row">
+    <select id="filterFam" onchange="render()"><option value="">All colors</option></select>
+    <select id="filterType" onchange="render()"><option value="">All types</option></select>
+    <select id="sortBy" onchange="render()">
+      <option value="name">Name</option>
+      <option value="brand">Brand</option>
+      <option value="purchaseDate">Purchased</option>
+      <option value="lastUsed">Last used</option>
+      <option value="usageCount">Times used</option>
+    </select>
+    <button id="sortDir" class="btn-sort-dir" onclick="toggleSortDir()" aria-label="Toggle sort direction">↑</button>
+  </div>
+</div>
+
+<div class="grid-wrap" id="main"></div>
+
+<div class="overlay" id="detailOverlay" onclick="overlayBgClick(event,'detailOverlay')">
+  <div class="panel" id="detailPanel"></div>
+</div>
+<div class="overlay" id="formOverlay" onclick="overlayBgClick(event,'formOverlay')">
+  <div class="panel" id="formPanel"></div>
+</div>
+
+<script>
+const TYPES    = ['Base', 'Crème', 'Duochrome', 'Flakies', 'Glitter', 'Glow-in-the-dark', 'Holo', 'Iridescent', 'Jelly', 'Magnetic', 'Matte', 'Metallic', 'Shimmer', 'Thermal', 'Topper'];
+const FAMILIES = ['Red','Pink','Coral','Orange','Yellow','Green','Teal','Blue','Purple','Lavender','Neutral','Nude','White','Black','Gray','Brown','Multichrome'];
+const FAM_HEX  = {Red:'#c94040',Pink:'#de7898',Coral:'#d96856',Orange:'#d4843c',Yellow:'#c4a82c',Green:'#60a460',Teal:'#3c9a94',Blue:'#4878c4',Purple:'#7848c4',Lavender:'#9c70c4',Neutral:'#9a8070',Nude:'#c09080',White:'#dddad5',Black:'#282420',Gray:'#848484',Brown:'#8c6448',Multichrome:'#9060b4'};
+
+const uid      = () => Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+const today    = () => new Date().toISOString().slice(0,10);
+const fmtDate  = d => d ? new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+const daysSince= d => d==null ? null : Math.floor((Date.now()-new Date(d+'T12:00:00'))/86400000);
+const swatchSolid=p => p.colorHex||FAM_HEX[p.colorFamily]||'#c09080';
+const esc      = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// ── API helpers ───────────────────────────────────────────────────────
+async function api(path, opts={}) {
+  const res = await fetch(path, {
+    headers: {'Content-Type':'application/json', ...(opts.headers||{})},
+    ...opts
+  });
+  if (!res.ok) { const msg=await res.text().catch(()=>res.statusText); throw new Error(msg); }
+  return res.json();
+}
+
+let polishes       = [];
+let activeDetailId = null;
+let activeEditId   = null;
+let pendingPhoto   = null;
+
+async function init() {
+  try {
+    polishes = await api('/api/polishes');
+    render();
+  } catch(e) {
+    document.getElementById('main').innerHTML=`<p class="no-results" style="color:var(--warn)">Could not load collection: ${e.message}</p>`;
+  }
+}
+
+// ── Dropdowns ─────────────────────────────────────────────────────────
+const famSel  = document.getElementById('filterFam');
+const typeSel = document.getElementById('filterType');
+FAMILIES.forEach(f=>{ const o=document.createElement('option'); o.value=f; o.textContent=f; famSel.appendChild(o); });
+TYPES.forEach(t  =>{ const o=document.createElement('option'); o.value=t; o.textContent=t; typeSel.appendChild(o); });
+
+// ── Menu ──────────────────────────────────────────────────────────────
+function toggleSortDir() { const b=document.getElementById('sortDir'); const desc=b.dataset.dir!=='desc'; b.dataset.dir=desc?'desc':'asc'; b.textContent=desc?'↓':'↑'; render(); }
+function toggleMenu() { document.getElementById('menuDrop').classList.toggle('open'); }
+function closeMenu()  { document.getElementById('menuDrop').classList.remove('open'); }
+document.addEventListener('click', e=>{ if(!document.getElementById('menuBtn').contains(e.target)) closeMenu(); });
+
+// ── Actions ───────────────────────────────────────────────────────────
+function markUsed(id) {
+  api(`/api/polishes/${id}/use`, {method:'POST', body:'{}'})
+    .then(updated => {
+      polishes=polishes.map(p=>p.id===id?updated:p);
+      render();
+      if(activeDetailId===id) showDetail(id);
+    })
+    .catch(e=>toast('Error saving: '+e.message, true));
+}
+
+function removeUseDate(id, date) {
+  api(`/api/polishes/${id}/use/${date}`, {method:'DELETE'})
+    .then(updated => {
+      polishes=polishes.map(p=>p.id===id?updated:p);
+      render();
+      if(activeDetailId===id) showDetail(id);
+    })
+    .catch(e=>toast('Error removing date: '+e.message, true));
+}
+
+function deletePolish(id) {
+  if(!confirm('Remove this polish?')) return;
+  api(`/api/polishes/${id}`, {method:'DELETE'})
+    .then(()=>{ polishes=polishes.filter(p=>p.id!==id); closeOverlay('detailOverlay'); render(); })
+    .catch(e=>toast('Error deleting: '+e.message, true));
+}
+
+// ── Export/Import ─────────────────────────────────────────────────────
+function exportData() {
+  if(!polishes.length){toast('Nothing to export.',true);return;}
+  window.location='/api/export';
+  toast(`Exported ${polishes.length} polishes ↓`);
+}
+async function importData(e) {
+  const file=e.target.files[0]; e.target.value=''; if(!file)return;
+  let imported; try{imported=JSON.parse(await file.text());}catch{toast('Invalid file.',true);return;}
+  if(!Array.isArray(imported)){toast('Invalid format.',true);return;}
+  const valid=imported.filter(p=>p.brand&&p.name); if(!valid.length){toast('No valid polishes found.',true);return;}
+  const mode=polishes.length>0?(confirm(`You have ${polishes.length} polishes.\n\nOK = Merge\nCancel = Replace`)?'merge':'replace'):'replace';
+  try {
+    const result=await api('/api/import',{method:'POST',body:JSON.stringify({polishes:valid,mode})});
+    polishes=await api('/api/polishes');
+    render();
+    toast(`Imported ${result.imported} polishes ✓`);
+  } catch(e){toast('Import failed: '+e.message,true);}
+}
+
+// ── Image compression ─────────────────────────────────────────────────
+function compressImage(file,maxPx=600,quality=0.78){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let w=i.width,h=i.height;if(w>maxPx||h>maxPx){if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}else{w=Math.round(w*maxPx/h);h=maxPx;}}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);res(c.toDataURL('image/jpeg',quality));};i.onerror=rej;i.src=e.target.result;};
+    r.onerror=rej;r.readAsDataURL(file);
+  });
+}
+async function handleFileInput(e){const f=e.target.files[0];if(f)await uploadFile(f);}
+function removePhoto(){pendingPhoto=null;renderPhotoArea();}
+
+// ── Photo area ────────────────────────────────────────────────────────
+function renderPhotoArea(){
+  const area=document.getElementById('photoArea'); if(!area)return;
+  if(pendingPhoto){
+    area.innerHTML=`<div class="photo-preview-wrap"><img class="photo-preview" src="${pendingPhoto}"><button class="photo-remove" onclick="removePhoto()">×</button></div>`;
+    return;
+  }
+  area.innerHTML=`
+    <div class="photo-tabs">
+      <button class="photo-tab active" id="tabUpload" onclick="switchPhotoTab('upload')">Upload file</button>
+      <button class="photo-tab" id="tabUrl" onclick="switchPhotoTab('url')">Paste URL</button>
+    </div>
+    <div id="photoTabUpload">
+      <div class="photo-upload-area" id="dropZone">
+        <input type="file" accept="image/*" onchange="handleFileInput(event)">
+        <div class="upload-icon">📷</div>
+        <p>Tap to upload a photo<br><span style="font-size:0.7rem;color:var(--muted)">Compressed automatically</span></p>
+      </div>
+    </div>
+    <div id="photoTabUrl" style="display:none;">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input id="urlInput" class="field" placeholder="https://…" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();fetchFromUrl();}">
+        <button onclick="fetchFromUrl()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:0.5rem 0.875rem;font-size:0.82rem;font-weight:500;cursor:pointer;white-space:nowrap;min-height:44px;">Copy in</button>
+      </div>
+      <div id="urlStatus" style="font-size:0.72rem;margin-top:5px;min-height:1em;"></div>
+      <p style="font-size:0.7rem;color:var(--muted);margin-top:4px;line-height:1.5;">Paste a direct image URL. Some sites block external requests — if it fails, save the image and upload instead.</p>
+    </div>`;
+  const dz=document.getElementById('dropZone');
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--accent)';});
+  dz.addEventListener('dragleave',()=>{dz.style.borderColor='';});
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.style.borderColor='';if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);});
+}
+function switchPhotoTab(tab){
+  document.getElementById('photoTabUpload').style.display=tab==='upload'?'':'none';
+  document.getElementById('photoTabUrl').style.display=tab==='url'?'':'none';
+  document.getElementById('tabUpload').classList.toggle('active',tab==='upload');
+  document.getElementById('tabUrl').classList.toggle('active',tab==='url');
+}
+async function uploadFile(file) {
+  const area=document.getElementById('photoArea');
+  if(area) area.innerHTML='<div class="photo-uploading">Uploading…</div>';
+  try {
+    const dataUrl=await compressImage(file);
+    const blob=await (await fetch(dataUrl)).blob();
+    const form=new FormData(); form.append('photo',blob,'photo.jpg');
+    const res=await fetch('/api/photos/upload',{method:'POST',body:form});
+    const data=await res.json();
+    pendingPhoto=data.url; renderPhotoArea();
+  } catch(e){alert('Could not upload that image. Please try another.');renderPhotoArea();}
+}
+
+async function fetchFromUrl(){
+  const url=document.getElementById('urlInput').value.trim();
+  const status=document.getElementById('urlStatus');
+  if(!url)return;
+  if(!/^https?:\/\//i.test(url)){status.style.color='var(--warn)';status.textContent='Please enter a full URL starting with https://';return;}
+  status.style.color='var(--muted)';status.textContent='Fetching…';
+  try {
+    const data=await api('/api/photos/fetch-url',{method:'POST',body:JSON.stringify({url})});
+    pendingPhoto=data.url; renderPhotoArea();
+  } catch(e){
+    status.style.color='var(--warn)';
+    status.textContent=e.message.includes('not an image')?'That URL doesn\'t point to an image.':`Couldn't load — ${e.message}`;
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────
+function getBadge(p){const ds=daysSince(p.lastUsed);if(ds===null)return'UNUSED';if(ds>365)return'1y+';if(ds>60)return ds+'d';return null;}
+
+let statFilter='';
+function setStatFilter(k){ statFilter=(k==='total'||statFilter===k)?'':k; render(); }
+
+function render(){
+  const q=document.getElementById('search').value.toLowerCase();
+  const fFam=document.getElementById('filterFam').value;
+  const fTyp=document.getElementById('filterType').value;
+  const srt=document.getElementById('sortBy').value;
+  const asc=document.getElementById('sortDir').dataset.dir!=='desc';
+  const td=today(), now=new Date(), nm=now.getMonth(), ny=now.getFullYear();
+
+  const total=polishes.length;
+  const statPreds={
+    month:p=>{if(!p.lastUsed)return false;const d=new Date(p.lastUsed+'T12:00:00');return d.getMonth()===nm&&d.getFullYear()===ny;},
+    never:p=>!p.lastUsed,
+  };
+  const month=polishes.filter(statPreds.month).length;
+  const never=polishes.filter(statPreds.never).length;
+
+  const sc=(k,v,l,col)=>`<button type="button" class="stat-pill${(statFilter||'total')===k?' active':''}" onclick="setStatFilter('${k}')"><span class="stat-num" style="color:${col||'var(--text)'}">${v}</span><span class="stat-label">${l}</span></button>`;
+  document.getElementById('stats').innerHTML=sc('total',total,'total')+sc('month',month,'this month',month?'var(--success)':null)+sc('never',never,'never used',never?'var(--accent)':null);
+
+  let shown=polishes.filter(p=>{
+    if(statFilter&&!statPreds[statFilter](p))return false;
+    if(fFam&&p.colorFamily!==fFam)return false;
+    if(fTyp&&!(p.types||[]).includes(fTyp))return false;
+    if(q&&!p.name?.toLowerCase().includes(q)&&!p.brand?.toLowerCase().includes(q))return false;
+    return true;
+  });
+  shown.sort((a,b)=>{
+    let v=0;
+    if(srt==='name')  v=(a.name||'').localeCompare(b.name||'');
+    else if(srt==='brand') v=(a.brand||'').localeCompare(b.brand||'');
+    else if(srt==='usageCount') v=(a.usageCount||0)-(b.usageCount||0);
+    else if(srt==='lastUsed'){
+      // nulls: asc = never-used last, desc = never-used first (dustiest)
+      if(!a.lastUsed&&!b.lastUsed) v=0;
+      else if(!a.lastUsed) v=asc?1:-1;
+      else if(!b.lastUsed) v=asc?-1:1;
+      else v=a.lastUsed.localeCompare(b.lastUsed);
+    }
+    else if(srt==='purchaseDate'){
+      // nulls always last
+      if(!a.purchaseDate&&!b.purchaseDate) v=0;
+      else if(!a.purchaseDate) v=asc?1:-1;
+      else if(!b.purchaseDate) v=asc?-1:1;
+      else v=a.purchaseDate.localeCompare(b.purchaseDate);
+    }
+    return asc?v:-v;
+  });
+
+  const main=document.getElementById('main');
+  if(!polishes.length){main.innerHTML=`<div class="empty"><div class="emoji">💅</div><p>Your collection is empty.<br>Add your first polish to get started.</p><button class="btn-add-first" onclick="openForm(null)">Add first polish</button></div>`;return;}
+  if(!shown.length){main.innerHTML='<p class="no-results">No polishes match your filters.</p>';return;}
+  main.innerHTML=`<div class="grid">${shown.map(p=>cardHTML(p,td)).join('')}</div>`;
+}
+
+function cardHTML(p,td){
+  const sw=swatchSolid(p),badge=getBadge(p),usedToday=p.lastUsed===td;
+  const bgStyle=p.photo?`background-color:${sw};background-image:url(${esc(p.thumb||p.photo)});background-size:cover;background-position:center;`:`background:${sw};`;
+  const dateColor=usedToday?'var(--success)':'var(--muted)';
+  const dateStr=usedToday?'Used today':p.lastUsed?fmtDate(p.lastUsed):'Never used';
+  const markBg=usedToday?'var(--success-bg)':'var(--accent)';
+  const markColor=usedToday?'var(--success)':'#fff';
+  return `<div class="polish-card" onclick="showDetail('${p.id}')">
+    <div class="swatch" style="${bgStyle}">${badge?`<span class="badge">${badge}</span>`:''}</div>
+    <div class="card-body">
+      <div class="card-brand">${esc(p.brand)}</div>
+      <div class="card-name">${esc(p.name)}</div>
+      <div class="card-date" style="color:${dateColor}">${dateStr}</div>
+      <button class="btn-mark" style="background:${markBg};color:${markColor}" ${usedToday?'disabled':''}
+        onclick="event.stopPropagation();markUsed('${p.id}')">${usedToday?'✓ Used':'Mark used'}</button>
+    </div>
+  </div>`;
+}
+
+// ── Detail panel ──────────────────────────────────────────────────────
+function showDetail(id){
+  activeDetailId=id;
+  const p=polishes.find(x=>x.id===id); if(!p)return;
+  const td=today(),sw=swatchSolid(p),usedToday=p.lastUsed===td,ds=daysSince(p.lastUsed);
+  const dates=[...(p.usageDates||[])].sort().reverse();
+  const bgStyle=p.photo?`background-color:${sw};background-image:url(${esc(p.photo)});background-size:cover;background-position:center;`:`background:${sw};`;
+  const markBg=usedToday?'var(--success-bg)':'var(--accent)';
+  const markColor=usedToday?'var(--success)':'#fff';
+  document.getElementById('detailPanel').innerHTML=`
+    <div class="drag-handle"></div>
+    <div class="detail-swatch" style="${bgStyle}">
+      <div class="detail-swatch-overlay"></div>
+      <button class="btn-close" onclick="closeOverlay('detailOverlay')">×</button>
+    </div>
+    <div class="detail-body">
+      <div class="detail-brand">${esc(p.brand)}</div>
+      <div class="detail-name">${esc(p.name)}</div>
+      ${(p.types||[]).length?`<div class="type-tags">${p.types.map(t=>`<span class="type-tag">${t}</span>`).join('')}</div>`:''}
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-box-label">Color family</div><div class="stat-box-val">${p.colorFamily||'—'}</div></div>
+        <div class="stat-box"><div class="stat-box-label">Purchased</div><div class="stat-box-val">${fmtDate(p.purchaseDate)}</div></div>
+        <div class="stat-box"><div class="stat-box-label">Times used</div><div class="stat-box-val">${p.usageCount||0}</div></div>
+        <div class="stat-box"><div class="stat-box-label">Last used</div><div class="stat-box-val">${p.lastUsed?(ds===0?'Today':ds+'d ago'):'Never'}</div></div>
+      </div>
+      <button class="btn-mark-main" style="background:${markBg};color:${markColor}" ${usedToday?'disabled':''}
+        onclick="markUsed('${p.id}')">${usedToday?'✓ Already marked used today':'Mark as used today'}</button>
+      ${dates.length?`<div class="history-title">Usage history (${dates.length})</div>
+      <div class="history-list">${dates.map(d=>`<div class="history-row"><div class="dot" style="background:${sw}"></div><span class="history-date">${fmtDate(d)}</span><button class="btn-unuse" onclick="removeUseDate('${p.id}','${d}')" title="Remove this date">×</button></div>`).join('')}</div>`:''}
+    </div>
+    <div class="panel-footer">
+      <button class="btn-edit" onclick="openForm('${p.id}')">Edit</button>
+      <button class="btn-delete" onclick="deletePolish('${p.id}')">Delete</button>
+    </div>`;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+// ── Form panel ────────────────────────────────────────────────────────
+function openForm(id){
+  activeEditId=id;
+  pendingPhoto=id?(polishes.find(x=>x.id===id)?.photo||null):null;
+  const p=id?polishes.find(x=>x.id===id):null;
+  const sw=p?(p.colorHex||FAM_HEX[p.colorFamily]||'#c09080'):'#c09080';
+  document.getElementById('formPanel').innerHTML=`
+    <div class="drag-handle"></div>
+    <div class="form-header">
+      <h2>${p?'Edit polish':'Add polish'}</h2>
+      <button class="btn-close-x" onclick="closeForm()">×</button>
+    </div>
+    <div class="form-body">
+      <div class="form-row">
+        <div><label class="field-label">Brand *</label><input id="fBrand" class="field" value="${esc(p?.brand||'')}" placeholder="OPI, Zoya…" autocomplete="off"></div>
+        <div><label class="field-label">Name *</label><input id="fName" class="field" value="${esc(p?.name||'')}" placeholder="Big Apple Red…" autocomplete="off"></div>
+      </div>
+      <div class="form-row-color">
+        <div>
+          <label class="field-label">Color family</label>
+          <select id="fFam" class="field" onchange="famChange()">
+            <option value="">Select…</option>${FAMILIES.map(f=>`<option value="${f}"${p?.colorFamily===f?' selected':''}>${f}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Swatch</label>
+          <div class="swatch-picker" id="swatchPreview" style="background:${sw}">
+            <input type="color" id="fHex" value="${p?.colorHex||sw}" oninput="document.getElementById('swatchPreview').style.background=this.value">
+          </div>
+        </div>
+      </div>
+      <div>
+        <label class="field-label">Photo</label>
+        <div id="photoArea"></div>
+      </div>
+      <div>
+        <label class="field-label">Type(s)</label>
+        <div class="type-grid">${TYPES.map(t=>`<button class="type-btn${(p?.types||[]).includes(t)?' on':''}" onclick="toggleType(this)">${t}</button>`).join('')}</div>
+      </div>
+      <div class="form-row">
+        <div><label class="field-label">Purchase date</label><input id="fPurchase" type="date" class="field" value="${p?.purchaseDate||''}"></div>
+        <div><label class="field-label">Last used</label><input id="fLastUsed" type="date" class="field" value="${p?.lastUsed||''}"></div>
+      </div>
+    </div>
+    <div class="panel-footer">
+      <button class="btn-cancel" onclick="closeForm()">Cancel</button>
+      <button class="btn-save" onclick="saveForm()">${p?'Save changes':'Add to collection'}</button>
+    </div>`;
+  renderPhotoArea();
+  if(id) closeOverlay('detailOverlay');
+  document.getElementById('formOverlay').classList.add('open');
+}
+
+function famChange(){
+  const fam=document.getElementById('fFam').value;
+  const col=FAM_HEX[fam]||'#c09080';
+  document.getElementById('fHex').value=col;
+  document.getElementById('swatchPreview').style.background=col;
+}
+function toggleType(btn){btn.classList.toggle('on');}
+
+function saveForm(){
+  const brand=document.getElementById('fBrand').value.trim();
+  const name=document.getElementById('fName').value.trim();
+  if(!brand||!name){alert('Brand and name are required.');return;}
+  const saveBtn=document.querySelector('#formPanel .btn-save');
+  saveBtn.disabled=true; saveBtn.textContent='Saving…';
+  const types=Array.from(document.querySelectorAll('.type-btn.on')).map(b=>b.textContent);
+  const data={brand,name,colorFamily:document.getElementById('fFam').value,colorHex:document.getElementById('fHex').value,photo:pendingPhoto,types,purchaseDate:document.getElementById('fPurchase').value,lastUsed:document.getElementById('fLastUsed').value};
+  const req=activeEditId
+    ? api(`/api/polishes/${activeEditId}`,{method:'PUT',body:JSON.stringify(data)})
+    : api('/api/polishes',{method:'POST',body:JSON.stringify({...data,addedAt:today()})});
+  req.then(updated=>{
+    if(activeEditId){polishes=polishes.map(p=>p.id===activeEditId?updated:p);}
+    else{polishes.push(updated);}
+    const eid=activeEditId;
+    closeForm(true); render();
+    if(eid) showDetail(eid);
+  }).catch(e=>{
+    toast('Error saving: '+e.message,true);
+    saveBtn.disabled=false; saveBtn.textContent=activeEditId?'Save changes':'Add to collection';
+  });
+}
+
+function closeForm(skip){
+  document.getElementById('formOverlay').classList.remove('open');
+  pendingPhoto=null;
+  if(!skip&&activeEditId) showDetail(activeEditId);
+  activeEditId=null;
+}
+function closeOverlay(id){
+  document.getElementById(id).classList.remove('open');
+  if(id==='detailOverlay') activeDetailId=null;
+}
+function overlayBgClick(e,id){if(e.target===document.getElementById(id))closeOverlay(id);}
+
+// ── Toast ─────────────────────────────────────────────────────────────
+function toast(msg,isError){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText=`position:fixed;bottom:calc(1.5rem + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:${isError?'#a03030':'#3a2e2c'};color:#fff;padding:0.6rem 1.2rem;border-radius:20px;font-size:0.84rem;z-index:999;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.18s;`;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{t.style.opacity='1';});
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),200);},2800);
+}
+
+init();
+</script>
+</body>
+</html>

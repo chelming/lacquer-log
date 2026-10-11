@@ -1,0 +1,14 @@
+services:
+  lacquer-log:
+    image: ghcr.io/chelming/lacquer-log:${TAG:-latest}
+    container_name: lacquer-log
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-3377}:${PORT:-3377}"
+    volumes:
+      - ${DATA_PATH:-./data}:${DATA_DIR:-/app/data}
+      - ${PHOTOS_PATH:-./photos}:${PHOTOS_DIR:-/app/photos}
+    environment:
+      - PORT=${PORT:-3377}
+      - DATA_DIR=${DATA_DIR:-/app/data}
+      - PHOTOS_DIR=${PHOTOS_DIR:-/app/photos}
